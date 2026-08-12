@@ -1,0 +1,60 @@
+name: Build iOS Simulator App
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project Opaflix.xcodeproj \
+            -scheme Opaflix \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify .app exists
+        run: |
+          APP_PATH="build/Build/Products/Debug-iphonesimulator/Opaflix.app"
+          if [ -d "$APP_PATH" ]; then
+            echo "App bundle found at: $APP_PATH"
+            ls -la "$APP_PATH"
+          else
+            echo "ERROR: App bundle not found. Listing build tree..."
+            find build -type d -name "*.app" 2>/dev/null || true
+            find build -maxdepth 5 -type d 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Zip the .app bundle
+        run: |
+          cd build/Build/Products/Debug-iphonesimulator
+          zip -r ../../../Opaflix-simulator.zip Opaflix.app
+          echo "Artifact created: build/Opaflix-simulator.zip"
+          ls -lh ../../../Opaflix-simulator.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Opaflix-simulator
+          path: build/Opaflix-simulator.zip
+          retention-days: 7
